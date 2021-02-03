@@ -223,7 +223,7 @@ func main() {
 		return
 	}
 
-	device := device.NewDevice(tun, logger)
+	device := device.NewDevice(tun, device.WithLogger(logger))
 
 	logger.Info.Println("Device started")
 
