@@ -24,6 +24,9 @@ type Device struct {
 	isClosed AtomicBool // device is closed? (acting as guard)
 	log      *Logger
 
+	// event listeners
+	onCreateBind func(*Device, uint16) (conn.Bind, uint16, error)
+
 	// synchronized resources (locks acquired in order)
 
 	state struct {
@@ -253,18 +256,20 @@ func (device *Device) SetPrivateKey(sk NoisePrivateKey) error {
 	return nil
 }
 
-func NewDevice(tunDevice tun.Device, logger *Logger) *Device {
+func NewDevice(tunDevice tun.Device, opts ...Option) *Device {
 	device := new(Device)
+
+	for _, o := range append(defaults, opts...) {
+		o(device)
+	}
 
 	device.isUp.Set(false)
 	device.isClosed.Set(false)
 
-	device.log = logger
-
 	device.tun.device = tunDevice
 	mtu, err := device.tun.device.MTU()
 	if err != nil {
-		logger.Error.Println("Trouble determining MTU, assuming default:", err)
+		device.log.Error.Println("Trouble determining MTU, assuming default:", err)
 		mtu = DefaultMTU
 	}
 	device.tun.mtu = int32(mtu)
@@ -490,7 +495,7 @@ func (device *Device) BindUpdate() error {
 
 		var err error
 		netc := &device.net
-		netc.bind, netc.port, err = conn.CreateBind(netc.port)
+		netc.bind, netc.port, err = device.onCreateBind(device, netc.port)
 		if err != nil {
 			netc.bind = nil
 			netc.port = 0
